@@ -1,0 +1,6 @@
+{
+  "name": "COD: Outbreak 2D - Zombies Survival",
+  "description": "Juego web 2D de supervivencia por rondas inspirado en COD Zombies con Mystery Box, Perk-a-Colas, Pack-a-Punch, barricadas, compras de pared y hordas de no-muertos.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
