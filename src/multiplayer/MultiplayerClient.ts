@@ -34,19 +34,45 @@ export class MultiplayerClient {
     this.setupListeners();
   }
 
+  public static formatWsUrl(rawUrl: string): string {
+    let url = rawUrl.trim();
+    if (!url) return '';
+
+    // Convert http(s) to ws(s)
+    if (url.startsWith('http://')) {
+      url = 'ws://' + url.slice(7);
+    } else if (url.startsWith('https://')) {
+      url = 'wss://' + url.slice(8);
+    } else if (!url.startsWith('ws://') && !url.startsWith('wss://')) {
+      url = 'wss://' + url;
+    }
+
+    // Strip trailing slash
+    while (url.endsWith('/')) {
+      url = url.slice(0, -1);
+    }
+
+    // Append /ws if not present
+    if (!url.endsWith('/ws')) {
+      url = url + '/ws';
+    }
+
+    return url;
+  }
+
   public static getEffectiveWsUrl(): string {
     // 1. Manual user override stored in localStorage
     if (typeof window !== 'undefined') {
       const saved = localStorage.getItem('bunker_ws_server');
       if (saved && saved.trim().length > 0) {
-        return saved.trim();
+        return MultiplayerClient.formatWsUrl(saved);
       }
     }
 
     // 2. Vite environment variable (configured in Vercel or .env)
     const envUrl = (import.meta as any).env?.VITE_WS_URL;
     if (envUrl && envUrl.trim().length > 0) {
-      return envUrl.trim();
+      return MultiplayerClient.formatWsUrl(envUrl);
     }
 
     // 3. Fallback when running on Vercel / Netlify / GitHub Pages (since static hosts do NOT run Node WebSockets)
@@ -83,6 +109,7 @@ export class MultiplayerClient {
     this.listeners.set('error', new Set());
     this.listeners.set('connected', new Set());
     this.listeners.set('disconnected', new Set());
+    this.listeners.set('status_change', new Set());
   }
 
   public on(event: string, callback: MultiplayerEventListener) {
@@ -106,18 +133,44 @@ export class MultiplayerClient {
     });
   }
 
-  public connect(customUrl?: string): Promise<void> {
+  /**
+   * Pings HTTP /health endpoint to awaken idle containers (e.g. Render free tier sleep)
+   */
+  public async wakeUpServer(targetWsUrl: string): Promise<void> {
+    try {
+      const httpUrl = targetWsUrl
+        .replace(/^wss:\/\//, 'https://')
+        .replace(/^ws:\/\//, 'http://')
+        .replace(/\/ws$/, '/health');
+      
+      this.emit('status_change', { status: 'waking_up', message: 'Despertando servidor en la nube...' });
+      
+      const controller = new AbortController();
+      const id = setTimeout(() => controller.abort(), 6000);
+      await fetch(httpUrl, { signal: controller.signal, mode: 'cors' }).catch(() => {});
+      clearTimeout(id);
+    } catch (_) {
+      // non-fatal, proceed to WebSocket attempt
+    }
+  }
+
+  public async connect(customUrl?: string): Promise<void> {
+    const rawTarget = customUrl || MultiplayerClient.getEffectiveWsUrl();
+    const targetUrl = MultiplayerClient.formatWsUrl(rawTarget);
+    this.activeServerUrl = targetUrl;
+
+    // If already connected to the same URL, reuse
+    if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+      this.isConnected = true;
+      return;
+    }
+
+    // Wake up sleeping Render container if remote
+    if (targetUrl.includes('onrender.com') || targetUrl.includes('railway.app')) {
+      await this.wakeUpServer(targetUrl);
+    }
+
     return new Promise((resolve, reject) => {
-      const targetUrl = customUrl || MultiplayerClient.getEffectiveWsUrl();
-      this.activeServerUrl = targetUrl;
-
-      // If already connected to the same URL, reuse
-      if (this.ws && this.ws.readyState === WebSocket.OPEN) {
-        this.isConnected = true;
-        resolve();
-        return;
-      }
-
       // Close existing socket if connecting to new target
       if (this.ws) {
         try {
@@ -134,6 +187,7 @@ export class MultiplayerClient {
         return;
       }
 
+      // Allow 20s timeout in case Render is spinning up from cold-sleep
       const connectionTimeout = setTimeout(() => {
         if (!this.isConnected) {
           try {
@@ -142,7 +196,7 @@ export class MultiplayerClient {
           this.ws = null;
           reject(new Error(`Timeout de conexión con ${targetUrl}`));
         }
-      }, 7000);
+      }, 20000);
 
       this.ws.onopen = () => {
         clearTimeout(connectionTimeout);
