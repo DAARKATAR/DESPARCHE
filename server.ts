@@ -349,6 +349,19 @@ async function setupApp() {
 
   server.listen(PORT, () => {
     console.log(`[Bunker 115 Server] Running on http://localhost:${PORT} with WebSocket support`);
+
+    // Keep-alive self-ping for Render deployment (prevents idle cold starts)
+    if (isProd) {
+      const pingTarget = process.env.PING_URL || 'https://desparche-oyws.onrender.com/health';
+      setInterval(async () => {
+        try {
+          const res = await fetch(pingTarget);
+          console.log(`[Keep-Alive] Pinged ${pingTarget} - Status: ${res.status}`);
+        } catch (err: any) {
+          console.warn(`[Keep-Alive] Ping warning:`, err.message);
+        }
+      }, 12 * 60 * 1000); // Every 12 minutes
+    }
   });
 }
 
