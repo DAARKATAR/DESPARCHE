@@ -82,7 +82,7 @@ export class MultiplayerClient {
        window.location.hostname.includes('netlify.app') ||
        window.location.hostname.includes('github.io'))
     ) {
-      return 'wss://ais-pre-t33wi5sdh6maaryr5zrf6d-263217880532.us-west2.run.app/ws';
+      return 'wss://desparche-oyws.onrender.com/ws';
     }
 
     // 4. Default same-origin connection (for localhost, Docker, Cloud Run, Render, Railway)

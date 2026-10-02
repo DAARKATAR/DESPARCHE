@@ -1,0 +1,16 @@
+name: Keep Render Server Alive
+
+on:
+  schedule:
+    # Run every 10 minutes (Render sleeps after 15 min of inactivity)
+    - cron: '*/10 * * * *'
+  workflow_dispatch: # Allows manual trigger from GitHub UI
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping Render Backend
+        run: |
+          echo "Pinging Render server to prevent cold start..."
+          curl -s -f -m 20 https://desparche-oyws.onrender.com/health || echo "Server might be waking up..."
