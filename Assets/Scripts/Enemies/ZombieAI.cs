@@ -47,7 +47,7 @@ namespace CodZombies.Enemies
             currentHealth = maxHealth;
             if (playerTarget == null)
             {
-                var p = GameObject.FindGameObjectWithTag("Player");
+                var p = FindAnyObjectByType<PlayerStats>();
                 if (p != null) playerTarget = p.transform;
             }
         }
@@ -173,10 +173,9 @@ namespace CodZombies.Enemies
 
         private void OnTriggerEnter2D(Collider2D collision)
         {
-            if (collision.CompareTag("Barricade"))
+            if (collision.TryGetComponent<Barricade>(out var bar))
             {
-                var bar = collision.GetComponent<Barricade>();
-                if (bar != null && bar.HasPlanks)
+                if (bar.HasPlanks)
                 {
                     currentBarricade = bar;
                 }

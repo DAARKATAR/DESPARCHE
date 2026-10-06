@@ -83,7 +83,7 @@ namespace CodZombies.Managers
             }
 
             // Wait until all spawned zombies are eliminated
-            while (GameObject.FindGameObjectsWithTag("Zombie").Length > 0)
+            while (FindObjectsByType<ZombieAI>(FindObjectsSortMode.None).Length > 0)
             {
                 yield return new WaitForSeconds(1.0f);
             }

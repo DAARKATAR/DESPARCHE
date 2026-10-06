@@ -27,6 +27,13 @@ namespace CodZombies.Editor
 
         private static void CreateSceneInternal(bool forceRecreate)
         {
+            if (EditorApplication.isPlayingOrWillChangePlaymode || EditorApplication.isPlaying)
+            {
+                return;
+            }
+
+            EnsureTagsExist();
+
             string scenesDir = "Assets/Scenes";
             string scenePath = "Assets/Scenes/Bunker115.unity";
 
@@ -60,6 +67,34 @@ namespace CodZombies.Editor
                 EditorSceneManager.OpenScene(scenePath, OpenSceneMode.Single);
                 Debug.Log("<color=cyan><b>[Bunker 115]</b> Abierta escena <b>Bunker115.unity</b>.</color>");
             }
+        }
+
+        private static void EnsureTagsExist()
+        {
+            var assets = AssetDatabase.LoadAllAssetsAtPath("ProjectSettings/TagManager.asset");
+            if (assets == null || assets.Length == 0) return;
+
+            SerializedObject tagManager = new SerializedObject(assets[0]);
+            SerializedProperty tagsProp = tagManager.FindProperty("tags");
+            if (tagsProp == null) return;
+
+            string[] requiredTags = new string[] { "Player", "Zombie", "Barricade", "Wall", "Bullet", "MysteryBox" };
+
+            foreach (string t in requiredTags)
+            {
+                bool found = false;
+                for (int i = 0; i < tagsProp.arraySize; i++)
+                {
+                    SerializedProperty tEntry = tagsProp.GetArrayElementAtIndex(i);
+                    if (tEntry.stringValue.Equals(t)) { found = true; break; }
+                }
+                if (!found)
+                {
+                    tagsProp.InsertArrayElementAtIndex(tagsProp.arraySize);
+                    tagsProp.GetArrayElementAtIndex(tagsProp.arraySize - 1).stringValue = t;
+                }
+            }
+            tagManager.ApplyModifiedProperties();
         }
     }
 }

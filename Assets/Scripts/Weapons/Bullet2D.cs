@@ -35,41 +35,37 @@ namespace CodZombies.Weapons
 
         private void OnTriggerEnter2D(Collider2D collision)
         {
-            if (collision.CompareTag("Zombie"))
+            if (collision.TryGetComponent<ZombieAI>(out var zombie))
             {
-                var zombie = collision.GetComponent<ZombieAI>();
-                if (zombie != null)
+                // Calculate headshot if hitting head trigger or upper zone
+                bool isHeadshot = collision.gameObject.name.Contains("Head");
+                zombie.TakeDamage(damage, isHeadshot, false);
+
+                // Sacred Lifesteal trait
+                if (lifesteal > 0f && ownerStats != null)
                 {
-                    // Calculate headshot if hitting head trigger or upper zone
-                    bool isHeadshot = collision.gameObject.name.Contains("Head");
-                    zombie.TakeDamage(damage, isHeadshot, false);
+                    ownerStats.Heal(lifesteal);
+                }
 
-                    // Sacred Lifesteal trait
-                    if (lifesteal > 0f && ownerStats != null)
-                    {
-                        ownerStats.Heal(lifesteal);
-                    }
+                // Cursed Infernal Burn trait
+                if (infernalBurn)
+                {
+                    zombie.ApplyBurn(damage * 0.4f, 2.5f);
+                }
 
-                    // Cursed Infernal Burn trait
-                    if (infernalBurn)
-                    {
-                        zombie.ApplyBurn(damage * 0.4f, 2.5f);
-                    }
+                if (isExplosive)
+                {
+                    Detonate();
+                    return;
+                }
 
-                    if (isExplosive)
-                    {
-                        Detonate();
-                        return;
-                    }
-
-                    penetrationRemaining--;
-                    if (penetrationRemaining <= 0)
-                    {
-                        Destroy(gameObject);
-                    }
+                penetrationRemaining--;
+                if (penetrationRemaining <= 0)
+                {
+                    Destroy(gameObject);
                 }
             }
-            else if (collision.CompareTag("Wall"))
+            else if (collision.gameObject.name.Contains("Wall") || collision.gameObject.name.Contains("Barricade"))
             {
                 if (isExplosive) Detonate();
                 else Destroy(gameObject);
@@ -81,10 +77,9 @@ namespace CodZombies.Weapons
             Collider2D[] hits = Physics2D.OverlapCircleAll(transform.position, explosionRadius);
             foreach (var h in hits)
             {
-                if (h.CompareTag("Zombie"))
+                if (h.TryGetComponent<ZombieAI>(out var z))
                 {
-                    var z = h.GetComponent<ZombieAI>();
-                    if (z != null) z.TakeDamage(explosionDamage, false, false);
+                    z.TakeDamage(explosionDamage, false, false);
                 }
             }
             Destroy(gameObject);
