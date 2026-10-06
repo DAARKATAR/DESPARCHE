@@ -375,8 +375,12 @@ namespace CodZombies.Bootstrap
             portraitCtrl.tier0_Downed = CreateDoomFaceSprite(new Color(0.3f, 0.3f, 0.3f), 5);
             portraitCtrl.ouchFaceSprite = CreateDoomFaceSprite(new Color(1f, 0.3f, 0.3f), 2);
 
-            Font defaultFont = Resources.GetBuiltinResource<Font>("Arial.ttf");
-            if (defaultFont == null) defaultFont = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
+            Font defaultFont = null;
+            try
+            {
+                defaultFont = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
+            }
+            catch { }
 
             // 2. Round Counter (Top Left)
             GameObject roundObj = new GameObject("Text_Round");
@@ -445,7 +449,7 @@ namespace CodZombies.Bootstrap
                 }
             }
             tex.Apply();
-            return Sprite.Create(tex, new Rect(0, 0, size, size), new Vector2(0.5f, 0.5f), size);
+            return Sprite.Create(tex, new Rect(0, 0, size, size), new Vector2(0.5f, 0.5f), size, 0, SpriteMeshType.FullRect);
         }
 
         private Sprite CreateBoxSprite(int w, int h, Color fill, Color border)
@@ -460,7 +464,7 @@ namespace CodZombies.Bootstrap
                 }
             }
             tex.Apply();
-            return Sprite.Create(tex, new Rect(0, 0, w, h), new Vector2(0.5f, 0.5f), 32);
+            return Sprite.Create(tex, new Rect(0, 0, w, h), new Vector2(0.5f, 0.5f), 32, 0, SpriteMeshType.FullRect);
         }
 
         private Sprite CreateDoomFaceSprite(Color skin, int damageStage)
@@ -493,7 +497,7 @@ namespace CodZombies.Bootstrap
                 }
             }
             tex.Apply();
-            return Sprite.Create(tex, new Rect(0, 0, s, s), new Vector2(0.5f, 0.5f), s);
+            return Sprite.Create(tex, new Rect(0, 0, s, s), new Vector2(0.5f, 0.5f), s, 0, SpriteMeshType.FullRect);
         }
     }
 
