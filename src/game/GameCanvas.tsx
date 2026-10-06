@@ -29,6 +29,20 @@ export const GameCanvas: React.FC = () => {
   const isMouseDown = useRef<boolean>(false);
   const lastTimeRef = useRef<number>(performance.now());
   const lastSyncTime = useRef<number>(0);
+  const lastUiTickRef = useRef<number>(0);
+  const canvasRectRef = useRef<{ left: number; top: number }>({ left: 0, top: 0 });
+
+  // Ambient Music Lifecycle
+  useEffect(() => {
+    if (gameStatus === 'playing') {
+      soundEngine.startAmbientMusic();
+    } else {
+      soundEngine.stopAmbientMusic();
+    }
+    return () => {
+      soundEngine.stopAmbientMusic();
+    };
+  }, [gameStatus]);
 
   // Mobile virtual joystick states
   const touchMove = useRef<{ active: boolean; startX: number; startY: number; currX: number; currY: number }>({
@@ -78,11 +92,24 @@ export const GameCanvas: React.FC = () => {
       canvas.width = w;
       canvas.height = h;
       rendererRef.current?.resize(w, h);
+      const r = canvas.getBoundingClientRect();
+      canvasRectRef.current = { left: r.left, top: r.top };
+    };
+
+    const handleScroll = () => {
+      if (canvas) {
+        const r = canvas.getBoundingClientRect();
+        canvasRectRef.current = { left: r.left, top: r.top };
+      }
     };
 
     handleResize();
     window.addEventListener('resize', handleResize);
-    return () => window.removeEventListener('resize', handleResize);
+    window.addEventListener('scroll', handleScroll, { passive: true });
+    return () => {
+      window.removeEventListener('resize', handleResize);
+      window.removeEventListener('scroll', handleScroll);
+    };
   }, []);
 
   // Hook Multiplayer Network Events to GameEngine
@@ -169,13 +196,8 @@ export const GameCanvas: React.FC = () => {
     };
 
     const handleMouseMove = (e: MouseEvent) => {
-      const canvas = canvasRef.current;
-      if (!canvas) return;
-      const rect = canvas.getBoundingClientRect();
-      mouseScreenPos.current = {
-        x: e.clientX - rect.left,
-        y: e.clientY - rect.top
-      };
+      mouseScreenPos.current.x = e.clientX - canvasRectRef.current.left;
+      mouseScreenPos.current.y = e.clientY - canvasRectRef.current.top;
     };
 
     const handleMouseDown = (e: MouseEvent) => {

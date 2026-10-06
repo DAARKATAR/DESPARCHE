@@ -1,5 +1,6 @@
 /**
  * Web Audio API procedural sound synthesizer for COD Zombies 2D
+ * High-performance, anti-clipping audio pipeline with DynamicsCompressor
  */
 
 class SoundEngine {
@@ -7,11 +8,18 @@ class SoundEngine {
   private isMuted: boolean = false;
   private volume: number = 0.35; // Comfortable, pleasant default
   private masterGain: GainNode | null = null;
+  private compressor: DynamicsCompressorNode | null = null;
   private sfxGain: GainNode | null = null;
+  private musicGain: GainNode | null = null;
   private ambientGain: GainNode | null = null;
   private initialized: boolean = false;
   private lowHealthOsc: OscillatorNode | null = null;
   private lowHealthGain: GainNode | null = null;
+
+  // Background Ambient Music Nodes
+  private isMusicPlaying: boolean = false;
+  private musicNodes: { oscs: OscillatorNode[]; gains: GainNode[] } | null = null;
+  private musicIntervalId: any = null;
 
   constructor() {
     // Lazy init on first user gesture
@@ -21,14 +29,28 @@ class SoundEngine {
     if (this.initialized && this.ctx) return;
     try {
       const AudioCtx = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
-      this.ctx = new AudioCtx();
+      this.ctx = new AudioCtx({ latencyHint: 'interactive' });
+
+      // Hardware protection: DynamicsCompressor prevents ANY digital clipping / speaker distortion
+      this.compressor = this.ctx.createDynamicsCompressor();
+      this.compressor.threshold.setValueAtTime(-14, this.ctx.currentTime);
+      this.compressor.knee.setValueAtTime(24, this.ctx.currentTime);
+      this.compressor.ratio.setValueAtTime(10, this.ctx.currentTime);
+      this.compressor.attack.setValueAtTime(0.003, this.ctx.currentTime);
+      this.compressor.release.setValueAtTime(0.25, this.ctx.currentTime);
+      this.compressor.connect(this.ctx.destination);
+
       this.masterGain = this.ctx.createGain();
       this.masterGain.gain.setValueAtTime(this.volume, this.ctx.currentTime);
-      this.masterGain.connect(this.ctx.destination);
+      this.masterGain.connect(this.compressor);
 
       this.sfxGain = this.ctx.createGain();
-      this.sfxGain.gain.setValueAtTime(0.5, this.ctx.currentTime);
+      this.sfxGain.gain.setValueAtTime(0.45, this.ctx.currentTime);
       this.sfxGain.connect(this.masterGain);
+
+      this.musicGain = this.ctx.createGain();
+      this.musicGain.gain.setValueAtTime(0.22, this.ctx.currentTime);
+      this.musicGain.connect(this.masterGain);
 
       this.ambientGain = this.ctx.createGain();
       this.ambientGain.gain.setValueAtTime(0.15, this.ctx.currentTime);
@@ -69,6 +91,69 @@ class SoundEngine {
     return this.isMuted;
   }
 
+  // --- Atmospheric Bunker Ambient Soundtrack (Disco Elysium / COD 115 Homage) ---
+  public startAmbientMusic() {
+    if (this.isMusicPlaying || this.isMuted) return;
+    this.ensureContext();
+    if (!this.ctx || !this.musicGain) return;
+
+    this.isMusicPlaying = true;
+    const ctx = this.ctx;
+    const musicGain = this.musicGain;
+
+    // Chords progression (C minor moody progression: Cm, Ab, Fm, G)
+    const chords = [
+      [65.41, 130.81, 155.56, 196.00], // C2, C3, Eb3, G3 (Deep Noir C Minor)
+      [51.91, 103.83, 155.56, 207.65], // Ab1, Ab2, Eb3, Ab3 (Melancholy Ab)
+      [43.65, 87.31, 130.81, 174.61],  // F1, F2, C3, F3 (Dark Suspense Fm)
+      [49.00, 98.00, 146.83, 196.00]   // G1, G2, D3, G3 (Unresolved Tension G)
+    ];
+
+    let chordIndex = 0;
+
+    const playChordStep = () => {
+      if (!this.isMusicPlaying || !this.ctx || !this.musicGain) return;
+      const t = this.ctx.currentTime;
+      const currentChord = chords[chordIndex % chords.length];
+      chordIndex++;
+
+      const filter = this.ctx.createBiquadFilter();
+      filter.type = 'lowpass';
+      filter.frequency.setValueAtTime(320, t);
+      filter.Q.setValueAtTime(2, t);
+
+      const stepGain = this.ctx.createGain();
+      stepGain.gain.setValueAtTime(0.001, t);
+      stepGain.gain.linearRampToValueAtTime(0.12, t + 2.5); // Soft swell
+      stepGain.gain.linearRampToValueAtTime(0.001, t + 8.5); // Slow atmospheric decay
+
+      filter.connect(stepGain);
+      stepGain.connect(musicGain);
+
+      currentChord.forEach((freq, idx) => {
+        const osc = ctx.createOscillator();
+        osc.type = idx === 0 ? 'sine' : idx === 1 ? 'triangle' : 'sine';
+        // Subtle analog tape pitch drift
+        osc.frequency.setValueAtTime(freq + (Math.random() - 0.5) * 0.4, t);
+        osc.connect(filter);
+        osc.start(t);
+        osc.stop(t + 8.8);
+      });
+    };
+
+    // Play first chord immediately
+    playChordStep();
+    this.musicIntervalId = setInterval(playChordStep, 8000);
+  }
+
+  public stopAmbientMusic() {
+    this.isMusicPlaying = false;
+    if (this.musicIntervalId) {
+      clearInterval(this.musicIntervalId);
+      this.musicIntervalId = null;
+    }
+  }
+
   // Gunshots
   public playGunshot(type: 'pistol' | 'shotgun' | 'smg' | 'rifle' | 'lmg' | 'wonder', isPap: boolean = false) {
     if (this.isMuted) return;
@@ -88,7 +173,7 @@ class SoundEngine {
       osc.frequency.setValueAtTime(startFreq, t);
       osc.frequency.exponentialRampToValueAtTime(endFreq, t + 0.22);
 
-      gain.gain.setValueAtTime(0.4, t);
+      gain.gain.setValueAtTime(0.35, t);
       gain.gain.exponentialRampToValueAtTime(0.01, t + 0.25);
 
       osc.connect(gain);
@@ -102,7 +187,7 @@ class SoundEngine {
       ring.type = 'sine';
       ring.frequency.setValueAtTime(2400, t);
       ring.frequency.exponentialRampToValueAtTime(400, t + 0.15);
-      ringGain.gain.setValueAtTime(0.15, t);
+      ringGain.gain.setValueAtTime(0.12, t);
       ringGain.gain.exponentialRampToValueAtTime(0.01, t + 0.15);
       ring.connect(ringGain);
       ringGain.connect(this.sfxGain);
@@ -128,7 +213,7 @@ class SoundEngine {
     filter.frequency.exponentialRampToValueAtTime(120, t + (type === 'shotgun' ? 0.3 : 0.18));
 
     const noiseGain = this.ctx.createGain();
-    const vol = type === 'shotgun' ? 0.65 : type === 'rifle' ? 0.6 : type === 'lmg' ? 0.5 : 0.35;
+    const vol = type === 'shotgun' ? 0.55 : type === 'rifle' ? 0.5 : type === 'lmg' ? 0.45 : 0.32;
     noiseGain.gain.setValueAtTime(vol, t);
     noiseGain.gain.exponentialRampToValueAtTime(0.01, t + (type === 'shotgun' ? 0.32 : 0.17));
 
@@ -145,7 +230,7 @@ class SoundEngine {
     subOsc.frequency.setValueAtTime(subFreq, t);
     subOsc.frequency.exponentialRampToValueAtTime(35, t + 0.12);
 
-    subGain.gain.setValueAtTime(0.5, t);
+    subGain.gain.setValueAtTime(0.45, t);
     subGain.gain.exponentialRampToValueAtTime(0.01, t + 0.13);
 
     subOsc.connect(subGain);
@@ -160,7 +245,7 @@ class SoundEngine {
       papOsc.type = 'sawtooth';
       papOsc.frequency.setValueAtTime(1400, t);
       papOsc.frequency.exponentialRampToValueAtTime(200, t + 0.15);
-      papGain.gain.setValueAtTime(0.2, t);
+      papGain.gain.setValueAtTime(0.18, t);
       papGain.gain.exponentialRampToValueAtTime(0.01, t + 0.16);
       papOsc.connect(papGain);
       papGain.connect(this.sfxGain);
@@ -191,7 +276,7 @@ class SoundEngine {
     osc.type = 'triangle';
     osc.frequency.setValueAtTime(freq, time);
     osc.frequency.exponentialRampToValueAtTime(100, time + dur);
-    gain.gain.setValueAtTime(0.25, time);
+    gain.gain.setValueAtTime(0.2, time);
     gain.gain.exponentialRampToValueAtTime(0.01, time + dur);
     osc.connect(gain);
     gain.connect(this.sfxGain);
@@ -212,7 +297,7 @@ class SoundEngine {
     osc.frequency.setValueAtTime(800, t);
     osc.frequency.exponentialRampToValueAtTime(200, t + 0.12);
 
-    gain.gain.setValueAtTime(0.3, t);
+    gain.gain.setValueAtTime(0.25, t);
     gain.gain.exponentialRampToValueAtTime(0.01, t + 0.12);
 
     osc.connect(gain);
@@ -242,7 +327,7 @@ class SoundEngine {
     filter.Q.setValueAtTime(3, t);
 
     gain.gain.setValueAtTime(0.01, t);
-    gain.gain.linearRampToValueAtTime(0.18, t + 0.08);
+    gain.gain.linearRampToValueAtTime(0.15, t + 0.08);
     gain.gain.exponentialRampToValueAtTime(0.01, t + 0.5);
 
     osc.connect(filter);
@@ -266,7 +351,7 @@ class SoundEngine {
     osc.frequency.setValueAtTime(isHeadshot ? 450 : 220, t);
     osc.frequency.exponentialRampToValueAtTime(60, t + 0.12);
 
-    gain.gain.setValueAtTime(isHeadshot ? 0.35 : 0.2, t);
+    gain.gain.setValueAtTime(isHeadshot ? 0.3 : 0.18, t);
     gain.gain.exponentialRampToValueAtTime(0.01, t + 0.12);
 
     osc.connect(gain);
@@ -281,7 +366,7 @@ class SoundEngine {
       pop.type = 'square';
       pop.frequency.setValueAtTime(750, t);
       pop.frequency.exponentialRampToValueAtTime(150, t + 0.08);
-      popGain.gain.setValueAtTime(0.2, t);
+      popGain.gain.setValueAtTime(0.18, t);
       popGain.gain.exponentialRampToValueAtTime(0.01, t + 0.08);
       pop.connect(popGain);
       popGain.connect(this.sfxGain);
@@ -303,7 +388,7 @@ class SoundEngine {
     osc.frequency.setValueAtTime(140, t);
     osc.frequency.exponentialRampToValueAtTime(45, t + 0.2);
 
-    gain.gain.setValueAtTime(0.3, t);
+    gain.gain.setValueAtTime(0.25, t);
     gain.gain.exponentialRampToValueAtTime(0.01, t + 0.2);
 
     osc.connect(gain);
@@ -328,7 +413,7 @@ class SoundEngine {
       osc.frequency.setValueAtTime(freq, t + idx * 0.15);
 
       gain.gain.setValueAtTime(0.001, t + idx * 0.15);
-      gain.gain.linearRampToValueAtTime(0.12, t + idx * 0.15 + 0.08);
+      gain.gain.linearRampToValueAtTime(0.1, t + idx * 0.15 + 0.08);
       gain.gain.exponentialRampToValueAtTime(0.001, t + idx * 0.15 + 1.6);
 
       osc.connect(gain);
@@ -349,7 +434,7 @@ class SoundEngine {
     gongFilter.type = 'lowpass';
     gongFilter.frequency.setValueAtTime(350, t);
 
-    gongGain.gain.setValueAtTime(0.18, t);
+    gongGain.gain.setValueAtTime(0.15, t);
     gongGain.gain.exponentialRampToValueAtTime(0.001, t + 2.2);
 
     gong.connect(gongFilter);
@@ -373,7 +458,7 @@ class SoundEngine {
       const gain = this.ctx.createGain();
       osc.type = 'sine';
       osc.frequency.setValueAtTime(400 + i * 25, tickTime);
-      gain.gain.setValueAtTime(0.15, tickTime);
+      gain.gain.setValueAtTime(0.12, tickTime);
       gain.gain.exponentialRampToValueAtTime(0.01, tickTime + 0.05);
       osc.connect(gain);
       gain.connect(this.sfxGain);
@@ -394,7 +479,7 @@ class SoundEngine {
       const gain = this.ctx!.createGain();
       osc.type = 'sine';
       osc.frequency.setValueAtTime(freq, t);
-      gain.gain.setValueAtTime(0.18, t);
+      gain.gain.setValueAtTime(0.15, t);
       gain.gain.exponentialRampToValueAtTime(0.01, t + 1.2);
       osc.connect(gain);
       gain.connect(this.sfxGain!);
@@ -417,7 +502,7 @@ class SoundEngine {
       osc.type = 'sawtooth';
       osc.frequency.setValueAtTime(700 - i * 40, laughTime);
       osc.frequency.linearRampToValueAtTime(500 - i * 40, laughTime + 0.1);
-      gain.gain.setValueAtTime(0.25, laughTime);
+      gain.gain.setValueAtTime(0.2, laughTime);
       gain.gain.exponentialRampToValueAtTime(0.01, laughTime + 0.12);
       osc.connect(gain);
       gain.connect(this.sfxGain);
@@ -444,7 +529,7 @@ class SoundEngine {
       osc.type = 'sine';
       osc.frequency.setValueAtTime(300, gulpTime);
       osc.frequency.exponentialRampToValueAtTime(180, gulpTime + 0.1);
-      gain.gain.setValueAtTime(0.22, gulpTime);
+      gain.gain.setValueAtTime(0.18, gulpTime);
       gain.gain.exponentialRampToValueAtTime(0.01, gulpTime + 0.12);
       osc.connect(gain);
       gain.connect(this.sfxGain);
@@ -458,7 +543,7 @@ class SoundEngine {
     chime.type = 'triangle';
     chime.frequency.setValueAtTime(587.33, t + 0.8);
     chime.frequency.setValueAtTime(880, t + 1.0);
-    chimeGain.gain.setValueAtTime(0.2, t + 0.8);
+    chimeGain.gain.setValueAtTime(0.16, t + 0.8);
     chimeGain.gain.exponentialRampToValueAtTime(0.01, t + 1.4);
     chime.connect(chimeGain);
     chimeGain.connect(this.sfxGain);
@@ -479,7 +564,7 @@ class SoundEngine {
     clank.type = 'square';
     clank.frequency.setValueAtTime(250, t);
     clank.frequency.exponentialRampToValueAtTime(40, t + 0.18);
-    clankGain.gain.setValueAtTime(0.4, t);
+    clankGain.gain.setValueAtTime(0.35, t);
     clankGain.gain.exponentialRampToValueAtTime(0.01, t + 0.2);
     clank.connect(clankGain);
     clankGain.connect(this.sfxGain);
@@ -493,7 +578,7 @@ class SoundEngine {
     hum.frequency.setValueAtTime(60, t + 0.1);
     hum.frequency.exponentialRampToValueAtTime(220, t + 1.5);
     humGain.gain.setValueAtTime(0.01, t + 0.1);
-    humGain.gain.linearRampToValueAtTime(0.3, t + 0.6);
+    humGain.gain.linearRampToValueAtTime(0.25, t + 0.6);
     humGain.gain.exponentialRampToValueAtTime(0.01, t + 2.0);
     hum.connect(humGain);
     humGain.connect(this.sfxGain);
@@ -516,7 +601,7 @@ class SoundEngine {
       osc.type = 'sawtooth';
       const time = t + idx * 0.1;
       osc.frequency.setValueAtTime(freq, time);
-      gain.gain.setValueAtTime(0.18, time);
+      gain.gain.setValueAtTime(0.15, time);
       gain.gain.exponentialRampToValueAtTime(0.01, time + 0.3);
       osc.connect(gain);
       gain.connect(this.sfxGain!);
@@ -538,7 +623,7 @@ class SoundEngine {
     osc.type = 'triangle';
     osc.frequency.setValueAtTime(110, t);
     osc.frequency.exponentialRampToValueAtTime(25, t + 1.8);
-    gain.gain.setValueAtTime(0.8, t);
+    gain.gain.setValueAtTime(0.7, t);
     gain.gain.exponentialRampToValueAtTime(0.01, t + 2.0);
     osc.connect(gain);
     gain.connect(this.sfxGain);
@@ -559,7 +644,7 @@ class SoundEngine {
       osc.type = 'sine';
       const time = t + idx * 0.08;
       osc.frequency.setValueAtTime(freq, time);
-      gain.gain.setValueAtTime(0.2, time);
+      gain.gain.setValueAtTime(0.16, time);
       gain.gain.exponentialRampToValueAtTime(0.01, time + 0.25);
       osc.connect(gain);
       gain.connect(this.sfxGain!);
@@ -580,7 +665,7 @@ class SoundEngine {
     osc.type = 'sine';
     osc.frequency.setValueAtTime(1200, t);
     osc.frequency.exponentialRampToValueAtTime(1800, t + 0.08);
-    gain.gain.setValueAtTime(0.12, t);
+    gain.gain.setValueAtTime(0.1, t);
     gain.gain.exponentialRampToValueAtTime(0.01, t + 0.09);
     osc.connect(gain);
     gain.connect(this.sfxGain);
@@ -600,7 +685,7 @@ class SoundEngine {
     osc.type = 'triangle';
     osc.frequency.setValueAtTime(280, t);
     osc.frequency.exponentialRampToValueAtTime(60, t + 0.09);
-    gain.gain.setValueAtTime(0.3, t);
+    gain.gain.setValueAtTime(0.25, t);
     gain.gain.exponentialRampToValueAtTime(0.01, t + 0.09);
     osc.connect(gain);
     gain.connect(this.sfxGain);
@@ -628,7 +713,7 @@ class SoundEngine {
       this.lowHealthGain = this.ctx.createGain();
       this.lowHealthOsc.type = 'sine';
       this.lowHealthOsc.frequency.setValueAtTime(55, t);
-      this.lowHealthGain.gain.setValueAtTime(0.25, t);
+      this.lowHealthGain.gain.setValueAtTime(0.2, t);
 
       this.lowHealthOsc.connect(this.lowHealthGain);
       this.lowHealthGain.connect(this.sfxGain);

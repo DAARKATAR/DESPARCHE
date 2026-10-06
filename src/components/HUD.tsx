@@ -184,8 +184,35 @@ export const HUD: React.FC<HUDProps> = ({
         <div className="flex flex-col gap-2">
           {/* Health & Volition Box with Character Portrait */}
           <div className="flex items-center gap-3 bg-stone-950/95 p-2.5 border border-stone-800/90 rounded-sm shadow-2xl backdrop-blur-md">
-            <PainterlyPortrait isLowHealth={isLowHealth} />
-            <div className="flex flex-col gap-1.5 w-36 sm:w-48">
+            <PainterlyPortrait 
+              health={p.health}
+              maxHealth={p.maxHealth}
+              alignment={p.alignment || (currentWeapon?.def.altarAffinity || 'neutral')}
+              aimAngle={p.angle}
+              lastDamageTime={p.lastDamageTime}
+              isKnifing={p.isKnifing}
+            />
+            <div className="flex flex-col gap-1.5 w-36 sm:w-52">
+              {/* Alignment Badge */}
+              <div className="flex items-center justify-between">
+                <span className={`text-[9px] font-mono font-bold tracking-wider px-1.5 py-0.5 rounded-xs uppercase ${
+                  (p.alignment || currentWeapon?.def.altarAffinity) === 'sacred'
+                    ? 'bg-amber-950/90 text-amber-300 border border-amber-500/80 shadow-[0_0_8px_#f59e0b]'
+                    : (p.alignment || currentWeapon?.def.altarAffinity) === 'cursed'
+                    ? 'bg-red-950/90 text-red-300 border border-red-600/80 shadow-[0_0_8px_#dc2626]'
+                    : 'bg-stone-900 text-stone-400 border border-stone-700'
+                }`}>
+                  {(p.alignment || currentWeapon?.def.altarAffinity) === 'sacred'
+                    ? '✨ LADO SAGRADO'
+                    : (p.alignment || currentWeapon?.def.altarAffinity) === 'cursed'
+                    ? '🔥 LADO MALDITO'
+                    : 'DETECTIVE BÚNKER'}
+                </span>
+                <span className="text-[9px] font-mono text-stone-500">
+                  {Math.round(healthPercent)}%
+                </span>
+              </div>
+
               {/* Health row */}
               <div className="flex justify-between items-center text-[10px] font-mono text-stone-400">
                 <span className="flex items-center gap-1 font-bold text-stone-200 tracking-wider">

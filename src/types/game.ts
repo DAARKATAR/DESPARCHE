@@ -270,6 +270,7 @@ export interface PlayerState {
   knifeTimer: number;
   regenCooldown: number;
   lastDamageTime: number;
+  alignment: 'neutral' | 'sacred' | 'cursed';
 }
 
 export type GameStatus = 'start' | 'playing' | 'paused' | 'gameover' | 'victory';
