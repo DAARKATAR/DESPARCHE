@@ -18,6 +18,18 @@ namespace CodZombies.Bootstrap
         [Header("Auto-Build Options")]
         public bool buildOnStart = true;
 
+        [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
+        private static void AutoBootOnPlay()
+        {
+            if (GameObject.FindWithTag("Player") == null)
+            {
+                Debug.Log("<color=cyan><b>[Bunker 115]</b> Generando automáticamente todo el juego al presionar Play...</color>");
+                GameObject bootstrapper = new GameObject("Bunker_Runtime_Bootstrapper");
+                var comp = bootstrapper.AddComponent<BunkerGameBootstrap>();
+                comp.BuildCompleteBunkerGame();
+            }
+        }
+
         private void Start()
         {
             if (buildOnStart && GameObject.FindWithTag("Player") == null)
