@@ -99,6 +99,11 @@ namespace CodZombies.Player
 
         public void AddPoints(int amount)
         {
+            if (World.PowerUpManager.Instance != null && World.PowerUpManager.Instance.IsDoublePointsActive)
+            {
+                amount *= 2;
+            }
+
             points += amount;
             OnPointsChanged?.Invoke(points);
         }

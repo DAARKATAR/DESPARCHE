@@ -24,6 +24,9 @@ namespace CodZombies.World
         private bool isInstaKillActive = false;
         private bool isDoublePointsActive = false;
 
+        public bool IsInstaKillActive => isInstaKillActive;
+        public bool IsDoublePointsActive => isDoublePointsActive;
+
         private void Awake()
         {
             if (Instance == null) Instance = this;
@@ -48,13 +51,13 @@ namespace CodZombies.World
                     break;
                 case PowerUpType.Nuke:
                     // Wipe all zombies currently alive and grant 400 pts
-                    var zombies = FindObjectsOfType<ZombieAI>();
+                    var zombies = FindObjectsByType<ZombieAI>(FindObjectsSortMode.None);
                     foreach (var z in zombies) z.TakeDamage(99999f, false, false);
                     player.AddPoints(400);
                     break;
                 case PowerUpType.Carpenter:
                     // Repair all barricades
-                    var barricades = FindObjectsOfType<Barricade>();
+                    var barricades = FindObjectsByType<Barricade>(FindObjectsSortMode.None);
                     foreach (var b in barricades)
                     {
                         while (b.TryRepairPlank(player)) { }

@@ -16,8 +16,6 @@ namespace CodZombies.World
         public bool HasPlanks => currentPlanks > 0;
         public bool IsFullyRepaired => currentPlanks >= maxPlanks;
 
-        private float repairTimer = 0f;
-
         private void Start()
         {
             UpdatePlankVisuals();

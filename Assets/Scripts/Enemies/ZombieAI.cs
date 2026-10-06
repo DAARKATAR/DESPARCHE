@@ -35,6 +35,8 @@ namespace CodZombies.Enemies
         private float lastAttackTime = -10f;
         private bool isDead = false;
 
+        public ZombieState CurrentState => state;
+
         private void Awake()
         {
             rb = GetComponent<Rigidbody2D>();
@@ -99,6 +101,11 @@ namespace CodZombies.Enemies
         public void TakeDamage(float amount, bool isHeadshot, bool isKnife)
         {
             if (isDead) return;
+
+            if (World.PowerUpManager.Instance != null && World.PowerUpManager.Instance.IsInstaKillActive)
+            {
+                amount = 99999f;
+            }
 
             float finalDamage = isHeadshot ? amount * 2.5f : amount;
             currentHealth -= finalDamage;
